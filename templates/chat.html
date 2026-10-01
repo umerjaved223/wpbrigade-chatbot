@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WPBrigade Chatbot</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="chat-page">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">WB</span>
+      <span>WPBrigade Chatbot</span>
+    </div>
+    <div class="account">
+      <span class="account-email">{{ email }}</span>
+      <a class="logout-btn" href="/logout">Logout</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat-panel card">
+      <div id="messages" class="messages"></div>
+      <form id="composer" class="composer">
+        <input id="command-input" type="text"
+               placeholder="Try: add the user john@xyz.com with phone +92332"
+               autocomplete="off" required>
+        <button type="submit">Send</button>
+      </form>
+    </section>
+
+    <aside class="users-panel card">
+      <h2>Users <span id="user-count" class="count-badge">0</span></h2>
+      <ul id="user-list" class="user-list"></ul>
+    </aside>
+  </main>
+
+  <script>
+    const messages = document.getElementById('messages');
+    const form = document.getElementById('composer');
+    const input = document.getElementById('command-input');
+    const userList = document.getElementById('user-list');
+    const userCount = document.getElementById('user-count');
+
+    function addMessage(text, who) {
+      const div = document.createElement('div');
+      div.className = 'message ' + who;
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function renderUsers(users) {
+      userCount.textContent = users.length;
+      userList.innerHTML = '';
+      if (!users.length) {
+        const li = document.createElement('li');
+        li.className = 'user-empty';
+        li.textContent = 'No users yet. Add one from the chat.';
+        userList.appendChild(li);
+        return;
+      }
+      for (const u of users) {
+        const li = document.createElement('li');
+        li.className = 'user-item';
+        const email = document.createElement('span');
+        email.className = 'user-email';
+        email.textContent = u.email;
+        const meta = document.createElement('span');
+        meta.className = 'user-meta';
+        meta.textContent = [u.name, u.phone, u.city].filter(Boolean).join(' · ') || 'no details yet';
+        li.appendChild(email);
+        li.appendChild(meta);
+        userList.appendChild(li);
+      }
+    }
+
+    async function refreshUsers() {
+      try {
+        const res = await fetch('/api/users');
+        if (!res.ok) return;
+        const data = await res.json();
+        renderUsers(data.users);
+      } catch (err) { /* keep the current list */ }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const command = input.value.trim();
+      if (!command) return;
+      addMessage(command, 'user');
+      input.value = '';
+      input.focus();
+      try {
+        const res = await fetch('/api/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command })
+        });
+        if (res.status === 401) { window.location.href = '/'; return; }
+        const data = await res.json();
+        addMessage(data.reply, 'bot');
+        if (data.users) { renderUsers(data.users); } else { refreshUsers(); }
+      } catch (err) {
+        addMessage('⚠️ Network error. Please try again.', 'bot');
+      }
+    });
+
+    addMessage("Hi! I manage users for you. Type 'help' to see example commands.", 'bot');
+    refreshUsers();
+  </script>
+</body>
+</html>
